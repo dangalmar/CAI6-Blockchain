@@ -16,7 +16,7 @@ contract VickreyAuction {
 
     mapping(address => Bid) public bids;
     address[] public bidders;
-    address public lowestBidder;
+    address payable public lowestBidder;
     address public secondLowestBidder;
     uint256 public lowestBid;
     uint256 public secondLowestBid;
@@ -68,7 +68,7 @@ contract VickreyAuction {
             secondLowestBid = lowestBid;
             secondLowestBidder = lowestBidder;
             lowestBid = msg.value;
-            lowestBidder = msg.sender;
+            lowestBidder = payable(msg.sender);
         } else if (msg.value < secondLowestBid) {
             secondLowestBid = msg.value;
             secondLowestBidder = msg.sender;
