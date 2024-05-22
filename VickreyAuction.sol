@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.7.0 <0.9.0;
+pragma solidity 0.8.18;
 
 contract VickreyAuction {
-    address payable public owner;
-    uint256 public endDate;
-    uint256 public marketPrice;
+    address payable public immutable owner;
+    uint256 public immutable endDate;
+    uint256 public immutable marketPrice;
     uint256 public constant minBidIncrement = 10; // 10% of the bid
     uint256 public constant maxBidders = 30;
     
@@ -20,6 +20,7 @@ contract VickreyAuction {
     address public secondLowestBidder;
     uint256 public lowestBid;
     uint256 public secondLowestBid;
+    mapping(address => uint256) public pendingReturns;
 
     bool public auctionEnded;
     bool public itemDelivered;
@@ -87,14 +88,23 @@ contract VickreyAuction {
 
         emit AuctionEnded(lowestBidder, secondLowestBid);
 
-        for (uint256 i = 0; i < bidders.length; i++) {
+        uint256 length = bidders.length;
+        for (uint256 i = 0; i < length; i++) {
             if (bidders[i] != lowestBidder) {
                 uint256 refundAmount = bids[bidders[i]].amount;
                 bids[bidders[i]].amount = 0;
-                payable(bidders[i]).transfer(refundAmount);
+                pendingReturns[bidders[i]] += refundAmount;
                 emit RefundIssued(bidders[i], refundAmount);
             }
         }
+    }
+
+    function withdrawRefund() external {
+        uint256 amount = pendingReturns[msg.sender];
+        require(amount > 0, "No funds to withdraw");
+
+        pendingReturns[msg.sender] = 0;
+        payable(msg.sender).transfer(amount);
     }
 
     function deliverItem() external auctionEndedModifier {
@@ -107,19 +117,24 @@ contract VickreyAuction {
             paymentAmount = lowestBid;
         }
         owner.transfer(paymentAmount);
-        lowestBidder.transfer(lowestBid);
         emit ItemDelivered(lowestBidder);
+
+        // Effect done before transfer
+        uint256 refundAmount = lowestBid;
+        lowestBid = 0;  // Prevent re-entrancy
+        lowestBidder.transfer(refundAmount);
     }
 
     function refundBidders() external auctionEndedModifier {
         require(auctionEnded, "Auction has not ended yet");
         require(itemDelivered, "Item has not been delivered yet");
 
-        for (uint256 i = 0; i < bidders.length; i++) {
+        uint256 length = bidders.length;
+        for (uint256 i = 0; i < length; i++) {
             if (bidders[i] != lowestBidder) {
                 uint256 refundAmount = bids[bidders[i]].amount;
                 bids[bidders[i]].amount = 0;
-                payable(bidders[i]).transfer(refundAmount);
+                pendingReturns[bidders[i]] += refundAmount;
                 emit RefundIssued(bidders[i], refundAmount);
             }
         }
